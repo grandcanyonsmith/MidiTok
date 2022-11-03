@@ -113,12 +113,10 @@ class OctupleMono(MIDITokenizer):
                 if current_tempo_idx + 1 < len(self.current_midi_metadata['tempo_changes']):
                     # Will loop over incoming tempo changes
                     for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
-                        # If this tempo change happened before the current moment
-                        if tempo_change.time <= note.start:
-                            current_tempo = tempo_change.tempo
-                            current_tempo_idx += 1  # update tempo value (might not change) and index
-                        elif tempo_change.time > note.start:
+                        if tempo_change.time > note.start:
                             break  # this tempo change is beyond the current time step, we break the loop
+                        current_tempo = tempo_change.tempo
+                        current_tempo_idx += 1  # update tempo value (might not change) and index
                 token_ts.append(self.vocab.event_to_token[f'Tempo_{current_tempo}'])
 
             tokens.append(token_ts)
@@ -143,7 +141,7 @@ class OctupleMono(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert time_division % max(self.beat_res.values()) == 0, \
-            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
+                f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         events = [self.tokens_to_events(time_step) for time_step in tokens]
 
         ticks_per_sample = time_division // max(self.beat_res.values())

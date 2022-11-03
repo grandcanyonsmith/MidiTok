@@ -66,10 +66,23 @@ class Structured(MIDITokenizer):
 
         # Creates the Pitch, Velocity, Duration and Time Shift events
         for n, note in enumerate(track.notes[:-1]):
-            # Pitch
-            events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.pitch))
-            # Velocity
-            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
+            events.extend(
+                (
+                    Event(
+                        type_='Pitch',
+                        time=note.start,
+                        value=note.pitch,
+                        desc=note.pitch,
+                    ),
+                    Event(
+                        type_='Velocity',
+                        time=note.start,
+                        value=note.velocity,
+                        desc=f'{note.velocity}',
+                    ),
+                )
+            )
+
             # Duration
             duration = note.end - note.start
             index = np.argmin(np.abs(dur_bins - duration))
@@ -81,19 +94,31 @@ class Structured(MIDITokenizer):
             events.append(Event(type_='Time-Shift', time=note.start, desc=f'{time_shift} ticks',
                                 value='.'.join(map(str, self.durations[index])) if time_shift != 0 else '0.0.1'))
         # Adds the last note
-        if track.notes[-1].pitch not in self.pitch_range:
-            if len(events) > 0:
-                del events[-1]
-        else:
-            events.append(Event(type_='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
-                                desc=track.notes[-1].pitch))
-            events.append(Event(type_='Velocity', time=track.notes[-1].start, value=track.notes[-1].velocity,
-                                desc=f'{track.notes[-1].velocity}'))
+        if track.notes[-1].pitch in self.pitch_range:
+            events.extend(
+                (
+                    Event(
+                        type_='Pitch',
+                        time=track.notes[-1].start,
+                        value=track.notes[-1].pitch,
+                        desc=track.notes[-1].pitch,
+                    ),
+                    Event(
+                        type_='Velocity',
+                        time=track.notes[-1].start,
+                        value=track.notes[-1].velocity,
+                        desc=f'{track.notes[-1].velocity}',
+                    ),
+                )
+            )
+
             duration = track.notes[-1].end - track.notes[-1].start
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(Event(type_='Duration', time=track.notes[-1].start,
                                 value='.'.join(map(str, self.durations[index])), desc=f'{duration} ticks'))
 
+        elif events:
+            del events[-1]
         events.sort(key=lambda x: x.time)
 
         return self.events_to_tokens(events)

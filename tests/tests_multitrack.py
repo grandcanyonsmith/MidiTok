@@ -78,7 +78,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
                     track.program = 0
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
-            if encoding == 'Octuple' or encoding == 'MuMIDI':
+            if encoding in ['Octuple', 'MuMIDI']:
                 miditok.merge_same_program_tracks(midi_to_compare.instruments)  # merge tracks
                 midi_to_compare.instruments.sort(key=lambda x: (x.program, x.is_drum))  # sort tracks
                 new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
@@ -142,9 +142,7 @@ def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> 
     if len(tokens) == 0:  # no track after notes quantization, this can happen
         return MidiFile()
     inf = miditok.get_midi_programs(midi)  # programs of tracks
-    new_midi = tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
-
-    return new_midi
+    return tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     files = list(Path(data_path).glob('**/*.mid'))
     t0 = time.time()
 
+    bar_len = 30
     for i, file_path in enumerate(files):
 
         # Reads the midi
@@ -77,7 +78,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             # Convert back tokens into a track object
             tempo_changes = None
             time_sig_changes = None
-            if encoding == 'Octuple' or encoding == 'MuMIDI':
+            if encoding in ['Octuple', 'MuMIDI']:
                 new_midi = tokenizer.tokens_to_midi(tokens, time_division=midi.ticks_per_beat)
                 track = new_midi.instruments[0]
                 if encoding == 'Octuple':
@@ -115,7 +116,6 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                     print(f'MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with '
                           f'{encoding} ({len(time_sig_errors)} errors)')
 
-        bar_len = 30
         filled_len = int(round(bar_len * (i+1) / len(files)))
         percents = round(100.0 * (i+1) / len(files), 2)
         bar = '=' * filled_len + '-' * (bar_len - filled_len)

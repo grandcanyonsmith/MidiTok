@@ -47,11 +47,10 @@ class MIDITokenizer:
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()
         self.velocities = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)[1:]  # remove velocity 0
-        self._first_beat_res = list(beat_res.values())[0]
-        for beat_range, res in beat_res.items():
-            if 0 in beat_range:
-                self._first_beat_res = res
-                break
+        self._first_beat_res = next(
+            (res for beat_range, res in beat_res.items() if 0 in beat_range),
+            list(beat_res.values())[0],
+        )
 
         # Tempos
         self.tempos = np.zeros(1)
@@ -63,7 +62,7 @@ class MIDITokenizer:
         self.rests = []
         if additional_tokens['Rest']:
             assert additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
-                'The minimum rest value must be equal or superior to the initial beat resolution'
+                    'The minimum rest value must be equal or superior to the initial beat resolution'
             self.rests = self.__create_rests()
 
         # Time Signatures
@@ -104,12 +103,7 @@ class MIDITokenizer:
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
 
-        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
-
-        # Convert each track to tokens
-        tokens = [self.track_to_tokens(track) for track in midi.instruments]
-
-        return tokens
+        return [self.track_to_tokens(track) for track in midi.instruments]
 
     def preprocess_midi(self, midi: MidiFile):
         """ Will process a MIDI file so it can be used to train a model.
@@ -131,7 +125,10 @@ class MIDITokenizer:
 
         # Recalculate max_tick is this could have change after notes quantization
         if len(midi.instruments) > 0:
-            midi.max_tick = max([max([note.end for note in track.notes]) for track in midi.instruments])
+            midi.max_tick = max(
+                max(note.end for note in track.notes) for track in midi.instruments
+            )
+
 
         if self.additional_tokens['Tempo']:
             self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
@@ -280,7 +277,7 @@ class MIDITokenizer:
             time_sig = time_sigs[i]
 
             if (time_sig.numerator, time_sig.denominator) == (prev_time_sig.numerator, prev_time_sig.denominator) or \
-                    time_sig.time == previous_tick:
+                        time_sig.time == previous_tick:
                 del time_sigs[i]
                 continue
 
@@ -396,13 +393,17 @@ class MIDITokenizer:
         :return: the time signatures
         """
         max_beat_res, nb_notes = self.additional_tokens.get('time_signature_range', (4, 1))
-        assert max_beat_res > 0 and math.log2(max_beat_res).is_integer(), \
-            f'The beat resolution in time signature must be a power of 2'
+        assert (
+            max_beat_res > 0 and math.log2(max_beat_res).is_integer()
+        ), 'The beat resolution in time signature must be a power of 2'
+
 
         time_signatures = []
-        for i in range(0, int(math.log2(max_beat_res)) + 1):  # 1 ~ max_beat_res
-            for j in range(1, ((2 ** i) * nb_notes) + 1):
-                time_signatures.append((j, 2 ** i))
+        for i in range(int(math.log2(max_beat_res)) + 1):  # 1 ~ max_beat_res
+            time_signatures.extend(
+                (j, 2**i) for j in range(1, ((2**i) * nb_notes) + 1)
+            )
+
         return time_signatures
 
     def _reduce_time_signature(self, numerator: int, denominator: int) -> Tuple[int, int]:
@@ -491,9 +492,8 @@ class MIDITokenizer:
             if midi.ticks_per_beat < max(self.beat_res.values()) * 4:
                 continue
             # Passing the MIDI to validation tests if given
-            if validation_fn is not None:
-                if not validation_fn(midi):
-                    continue
+            if validation_fn is not None and not validation_fn(midi):
+                continue
 
             # Converting the MIDI to tokens and saving them as json
             tokens = self.midi_to_tokens(midi)
@@ -515,18 +515,12 @@ class MIDITokenizer:
         """
         err = 0
         previous_type = self.vocab.token_type(tokens[0])
-        if consider_pad:
-            for token in tokens[1:]:
-                if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
-                    err += 1
-                previous_type = self.vocab.token_type(token)
-        else:
-            for token in tokens[1:]:
-                if previous_type == 'PAD':  # stop iteration at the first PAD token
-                    break
-                if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
-                    err += 1
-                previous_type = self.vocab.token_type(token)
+        for token in tokens[1:]:
+            if not consider_pad and previous_type == 'PAD':
+                break
+            if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
+                err += 1
+            previous_type = self.vocab.token_type(token)
         return err / len(tokens)
 
     @staticmethod
@@ -634,9 +628,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
     :return: the detected chords as Event objects
     """
     assert simul_notes_limit >= 5, 'simul_notes_limit must be higher than 5, chords can be made up to 5 notes'
-    tuples = []
-    for note in notes:
-        tuples.append((note.pitch, int(note.start), int(note.end)))
+    tuples = [(note.pitch, int(note.start), int(note.end)) for note in notes]
     notes = np.asarray(tuples)
 
     time_div_half = time_division // 2
@@ -668,11 +660,15 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
         # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
         chord_map = tuple(chord[:, 0] - chord[0, 0])
         if 3 <= len(chord_map) <= 5 and chord_map[-1] <= 24:  # max interval between the root and highest degree
-            chord_quality = len(chord)
-            for quality, known_chord in CHORD_MAPS.items():
-                if known_chord == chord_map:
-                    chord_quality = quality
-                    break
+            chord_quality = next(
+                (
+                    quality
+                    for quality, known_chord in CHORD_MAPS.items()
+                    if known_chord == chord_map
+                ),
+                len(chord),
+            )
+
             if only_known_chord and isinstance(chord_quality, int):
                 count += len(onset_notes)  # Move to the next notes
                 continue  # this chords was not recognize and we don't want it
@@ -680,10 +676,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
         previous_tick = max(onset_notes[:, 1])
         count += len(onset_notes)  # Move to the next notes
 
-    events = []
-    for chord in chords:
-        events.append(Event('Chord', chord[1], chord[0], chord[2]))
-    return events
+    return [Event('Chord', chord[1], chord[0], chord[2]) for chord in chords]
 
 
 def merge_tracks(tracks: Union[List[Instrument], MidiFile], effects: bool = False) -> Instrument:
@@ -696,13 +689,9 @@ def merge_tracks(tracks: Union[List[Instrument], MidiFile], effects: bool = Fals
     :param effects: will also merge effects, i.e. control changes, sustain pedals and pitch bends
     :return: the merged track
     """
-    if isinstance(tracks, MidiFile):
-        tracks_ = tracks.instruments
-    else:
-        tracks_ = tracks
-
+    tracks_ = tracks.instruments if isinstance(tracks, MidiFile) else tracks
     # Change name
-    tracks_[0].name += ''.join([' / ' + t.name for t in tracks_[1:]])
+    tracks_[0].name += ''.join([f' / {t.name}' for t in tracks_[1:]])
 
     # Gather and sort notes
     tracks_[0].notes = sum((t.notes for t in tracks_), [])
@@ -735,7 +724,10 @@ def merge_same_program_tracks(tracks: List[Instrument]):
     :param tracks: list of tracks
     """
     # Gathers tracks programs and indexes
-    tracks_programs = [int(track.program) if not track.is_drum else -1 for track in tracks]
+    tracks_programs = [
+        -1 if track.is_drum else int(track.program) for track in tracks
+    ]
+
 
     # Detects duplicated programs
     duplicated_programs = [k for k, v in Counter(tracks_programs).items() if v > 1]
@@ -744,7 +736,7 @@ def merge_same_program_tracks(tracks: List[Instrument]):
     for program in duplicated_programs:
         idx = [i for i in range(len(tracks)) if
                (tracks[i].is_drum if program == -1 else tracks[i].program == program and not tracks[i].is_drum)]
-        tracks[idx[0]].name += ''.join([' / ' + tracks[i].name for i in idx[1:]])
+        tracks[idx[0]].name += ''.join([f' / {tracks[i].name}' for i in idx[1:]])
         tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
         tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
         for i in list(reversed(idx[1:])):

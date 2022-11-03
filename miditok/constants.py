@@ -2,6 +2,7 @@
 
 """
 
+
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
 PITCH_RANGE = range(21, 109)  # the recommended pitches for piano in the GM2 specs are from 21 to 108
@@ -206,23 +207,123 @@ MIDI_INSTRUMENTS = [{'name': 'Acoustic Grand Piano', 'pitch_range': (21, 108)},
                     {'name': 'Applause, Laughing, Screaming, Punch, Heart Beat, Footstep', 'pitch_range': (0, 127)},
                     {'name': 'Gunshot, Machine Gun, Lasergun, Explosion', 'pitch_range': (0, 127)}]
 
-INSTRUMENT_CLASSES = dict([(n, (0, 'Piano')) for n in range(0, 8)] +
-                          [(n, (1, 'Chromatic Percussion')) for n in range(8, 16)] +
-                          [(n, (2, 'Organ')) for n in range(16, 24)] +
-                          [(n, (3, 'Guitar')) for n in range(24, 32)] +
-                          [(n, (4, 'Bass')) for n in range(32, 40)] +
-                          [(n, (5, 'Strings')) for n in range(40, 48)] +
-                          [(n, (6, 'Ensemble')) for n in range(48, 56)] +
-                          [(n, (7, 'Brass')) for n in range(56, 64)] +
-                          [(n, (8, 'Reed')) for n in range(64, 72)] +
-                          [(n, (9, 'Pipe')) for n in range(72, 80)] +
-                          [(n, (10, 'Synth Lead')) for n in range(80, 88)] +
-                          [(n, (11, 'Synth Pad')) for n in range(88, 96)] +
-                          [(n, (12, 'Synth Effects')) for n in range(96, 104)] +
-                          [(n, (13, 'Ethnic')) for n in range(104, 112)] +
-                          [(n, (14, 'Percussive')) for n in range(112, 120)] +
-                          [(n, (15, 'Sound Effects')) for n in range(120, 128)] +
-                          [(-1, (-1, 'Drums'))])
+INSTRUMENT_CLASSES = dict(
+    (
+        (
+            (
+                (
+                    (
+                        (
+                            (
+                                (
+                                    (
+                                        (
+                                            (
+                                                (
+                                                    (
+                                                        (
+                                                            (
+                                                                (
+                                                                    [
+                                                                        (
+                                                                            n,
+                                                                            (
+                                                                                0,
+                                                                                'Piano',
+                                                                            ),
+                                                                        )
+                                                                        for n in range(
+                                                                            8
+                                                                        )
+                                                                    ]
+                                                                    + [
+                                                                        (
+                                                                            n,
+                                                                            (
+                                                                                1,
+                                                                                'Chromatic Percussion',
+                                                                            ),
+                                                                        )
+                                                                        for n in range(
+                                                                            8,
+                                                                            16,
+                                                                        )
+                                                                    ]
+                                                                )
+                                                                + [
+                                                                    (
+                                                                        n,
+                                                                        (
+                                                                            2,
+                                                                            'Organ',
+                                                                        ),
+                                                                    )
+                                                                    for n in range(
+                                                                        16, 24
+                                                                    )
+                                                                ]
+                                                            )
+                                                            + [
+                                                                (
+                                                                    n,
+                                                                    (
+                                                                        3,
+                                                                        'Guitar',
+                                                                    ),
+                                                                )
+                                                                for n in range(
+                                                                    24, 32
+                                                                )
+                                                            ]
+                                                        )
+                                                        + [
+                                                            (n, (4, 'Bass'))
+                                                            for n in range(
+                                                                32, 40
+                                                            )
+                                                        ]
+                                                    )
+                                                    + [
+                                                        (n, (5, 'Strings'))
+                                                        for n in range(40, 48)
+                                                    ]
+                                                )
+                                                + [
+                                                    (n, (6, 'Ensemble'))
+                                                    for n in range(48, 56)
+                                                ]
+                                            )
+                                            + [
+                                                (n, (7, 'Brass'))
+                                                for n in range(56, 64)
+                                            ]
+                                        )
+                                        + [
+                                            (n, (8, 'Reed'))
+                                            for n in range(64, 72)
+                                        ]
+                                    )
+                                    + [(n, (9, 'Pipe')) for n in range(72, 80)]
+                                )
+                                + [
+                                    (n, (10, 'Synth Lead'))
+                                    for n in range(80, 88)
+                                ]
+                            )
+                            + [(n, (11, 'Synth Pad')) for n in range(88, 96)]
+                        )
+                        + [(n, (12, 'Synth Effects')) for n in range(96, 104)]
+                    )
+                    + [(n, (13, 'Ethnic')) for n in range(104, 112)]
+                )
+                + [(n, (14, 'Percussive')) for n in range(112, 120)]
+            )
+            + [(n, (15, 'Sound Effects')) for n in range(120, 128)]
+        )
+        + [(-1, (-1, 'Drums'))]
+    )
+)
+
 
 INSTRUMENT_CLASSES_RANGES = {'Piano': (0, 7), 'Chromatic Percussion': (8, 15), 'Organ': (16, 23), 'Guitar': (24, 31),
                              'Bass': (32, 39), 'Strings': (40, 47), 'Ensemble': (48, 55), 'Brass': (56, 63),

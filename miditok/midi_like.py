@@ -52,22 +52,45 @@ class MIDILike(MIDITokenizer):
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
         min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
-            if self.additional_tokens['Rest'] else 0
+                if self.additional_tokens['Rest'] else 0
         events = []
 
         # Creates the Note On, Note Off and Velocity events
-        for n, note in enumerate(track.notes):
-            # Note On
-            events.append(Event(type_='Note-On', time=note.start, value=note.pitch, desc=note.end))
-            # Velocity
-            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
-            # Note Off
-            events.append(Event(type_='Note-Off', time=note.end, value=note.pitch, desc=note.end))
+        for note in track.notes:
+            events.extend(
+                (
+                    Event(
+                        type_='Note-On',
+                        time=note.start,
+                        value=note.pitch,
+                        desc=note.end,
+                    ),
+                    Event(
+                        type_='Velocity',
+                        time=note.start,
+                        value=note.velocity,
+                        desc=f'{note.velocity}',
+                    ),
+                    Event(
+                        type_='Note-Off',
+                        time=note.end,
+                        value=note.pitch,
+                        desc=note.end,
+                    ),
+                )
+            )
+
         # Adds tempo events if specified
         if self.additional_tokens['Tempo']:
-            for tempo_change in self.current_midi_metadata['tempo_changes']:
-                events.append(Event(type_='Tempo', time=tempo_change.time, value=tempo_change.tempo,
-                                    desc=tempo_change.tempo))
+            events.extend(
+                Event(
+                    type_='Tempo',
+                    time=tempo_change.time,
+                    value=tempo_change.tempo,
+                    desc=tempo_change.tempo,
+                )
+                for tempo_change in self.current_midi_metadata['tempo_changes']
+            )
 
         # Sorts events
         events.sort(key=lambda x: x.time)
@@ -75,17 +98,15 @@ class MIDILike(MIDITokenizer):
         # Time Shift
         previous_tick = 0
         previous_note_end = track.notes[0].start + 1
-        for e, event in enumerate(events.copy()):
-
+        for event in events.copy():
             # No time shift
             if event.time == previous_tick:
                 pass
 
-            # (Rest)
             elif self.additional_tokens['Rest'] and event.type in ['Note-On', 'Tempo'] \
-                    and event.time - previous_note_end >= min_rest:
+                        and event.time - previous_note_end >= min_rest:
                 rest_beat, rest_pos = divmod(event.time - previous_tick, self.current_midi_metadata['time_division'])
-                rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
+                rest_beat = min(rest_beat, max(r[0] for r in self.rests))
                 rest_pos = round(rest_pos / ticks_per_sample)
                 rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
 
@@ -95,7 +116,10 @@ class MIDILike(MIDITokenizer):
                     previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                 while rest_pos >= self.rests[0][1]:
-                    rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
+                    rest_pos_temp = min(
+                        (r[1] for r in self.rests), key=lambda x: abs(x - rest_pos)
+                    )
+
                     events.append(Event(type_='Rest', time=rest_tick, value=f'0.{rest_pos_temp}',
                                         desc=f'0.{rest_pos_temp}'))
                     previous_tick += round(rest_pos_temp * ticks_per_sample)
@@ -108,7 +132,6 @@ class MIDILike(MIDITokenizer):
                     events.append(Event(type_='Time-Shift', time=previous_tick,
                                         value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
 
-            # Time shift
             else:
                 time_shift = event.time - previous_tick
                 index = np.argmin(np.abs(dur_bins - time_shift))
@@ -129,7 +152,7 @@ class MIDILike(MIDITokenizer):
 
     def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False), default_duration: int = None) \
-            -> Tuple[Instrument, List[TempoChange]]:
+                -> Tuple[Instrument, List[TempoChange]]:
         """ Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert
@@ -247,12 +270,13 @@ class MIDILike(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
+        dic = {
+            'Note-On': ['Velocity'],
+            'Velocity': ['Note-On', 'Time-Shift'],
+            'Time-Shift': ['Note-Off', 'Note-On'],
+            'Note-Off': ['Note-Off', 'Note-On', 'Time-Shift'],
+        }
 
-        dic['Note-On'] = ['Velocity']
-        dic['Velocity'] = ['Note-On', 'Time-Shift']
-        dic['Time-Shift'] = ['Note-Off', 'Note-On']
-        dic['Note-Off'] = ['Note-Off', 'Note-On', 'Time-Shift']
 
         if self.additional_tokens['Chord']:
             dic['Chord'] = ['Note-On']
@@ -341,7 +365,7 @@ class MIDILike(MIDITokenizer):
             return 2
         elif x.type == "Chord":
             return 3
-        elif x.type == 'Time-Shift' or x.type == 'Rest':
+        elif x.type in ['Time-Shift', 'Rest']:
             return 1000  # always last
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
             return 4

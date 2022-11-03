@@ -85,8 +85,14 @@ class MuMIDI(MIDITokenizer):
         # Preprocess the MIDI file
         t = 0
         while t < len(midi.instruments):
-            self.quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat,
-                                self.pitch_range if not midi.instruments[t].is_drum else self.drum_pitch_range)
+            self.quantize_notes(
+                midi.instruments[t].notes,
+                midi.ticks_per_beat,
+                self.drum_pitch_range
+                if midi.instruments[t].is_drum
+                else self.pitch_range,
+            )
+
             midi.instruments[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
             remove_duplicated_notes(midi.instruments[t].notes)  # remove possible duplicated notes
             if len(midi.instruments[t].notes) == 0:
@@ -127,17 +133,15 @@ class MuMIDI(MIDITokenizer):
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         for note_event in note_tokens:
             # (Tempo) update tempo values current_tempo
-            if self.additional_tokens['Tempo']:
-                # If the current tempo is not the last one
-                if current_tempo_idx + 1 < len(self.current_midi_metadata['tempo_changes']):
+            if self.additional_tokens['Tempo'] and current_tempo_idx + 1 < len(
+                self.current_midi_metadata['tempo_changes']
+            ):
                     # Will loop over incoming tempo changes
-                    for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
-                        # If this tempo change happened before the current moment
-                        if tempo_change.time <= note_event[0].time:
-                            current_tempo = tempo_change.tempo
-                            current_tempo_idx += 1  # update tempo value (might not change) and index
-                        elif tempo_change.time > note_event[0].time:
-                            break  # this tempo change is beyond the current time step, we break the loop
+                for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
+                    if tempo_change.time > note_event[0].time:
+                        break  # this tempo change is beyond the current time step, we break the loop
+                    current_tempo = tempo_change.tempo
+                    current_tempo_idx += 1  # update tempo value (might not change) and index
             # Positions and bars
             if note_event[0].time != current_tick:
                 pos_index = int((note_event[0].time % ticks_per_bar) / ticks_per_sample)
@@ -242,7 +246,7 @@ class MuMIDI(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert time_division % max(self.beat_res.values()) == 0, \
-            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
+                f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
         midi.tempo_changes.append(TempoChange(TEMPO, 0))
         ticks_per_sample = time_division // max(self.beat_res.values())
@@ -266,7 +270,7 @@ class MuMIDI(MIDITokenizer):
                     _ = tracks[current_track]
                 except KeyError:
                     tracks[current_track] = []
-            elif events[0].type == 'Pitch' or events[0].type == 'DrumPitch':
+            elif events[0].type in ['Pitch', 'DrumPitch']:
                 pitch = int(events[0].value)
                 vel = int(events[1].value)
                 duration = self._token_duration_to_ticks(events[2].value, time_division)
@@ -360,13 +364,14 @@ class MuMIDI(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
+        dic = {
+            'Bar': ['Bar', 'Position'],
+            'Position': ['Program'],
+            'Program': ['Pitch', 'DrumPitch'],
+            'Pitch': ['Pitch', 'Program', 'Bar', 'Position'],
+            'DrumPitch': ['DrumPitch', 'Program', 'Bar', 'Position'],
+        }
 
-        dic['Bar'] = ['Bar', 'Position']
-        dic['Position'] = ['Program']
-        dic['Program'] = ['Pitch', 'DrumPitch']
-        dic['Pitch'] = ['Pitch', 'Program', 'Bar', 'Position']
-        dic['DrumPitch'] = ['DrumPitch', 'Program', 'Bar', 'Position']
 
         if self.additional_tokens['Chord']:
             dic['Program'] += ['Chord']
@@ -390,8 +395,8 @@ class MuMIDI(MIDITokenizer):
         err = 0
         previous_type = self.vocab.token_type(tokens[0][0])
         current_pitches = []
-        bar_idx = -1 if not self.additional_tokens['Tempo'] else -2
-        pos_idx = -2 if not self.additional_tokens['Tempo'] else -3
+        bar_idx = -2 if self.additional_tokens['Tempo'] else -1
+        pos_idx = -3 if self.additional_tokens['Tempo'] else -2
         current_bar = int(self.vocab.token_to_event[tokens[0][bar_idx]].split('_')[1])
         current_pos = self.vocab.token_to_event[tokens[0][pos_idx]].split('_')[1]
         current_pos = int(current_pos) if current_pos != 'Ignore' else -1
