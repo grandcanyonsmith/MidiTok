@@ -164,12 +164,10 @@ class Octuple(MIDITokenizer):
                 if current_tempo_idx + 1 < len(self.current_midi_metadata['tempo_changes']):
                     # Will loop over incoming tempo changes
                     for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
-                        # If this tempo change happened before the current moment
-                        if tempo_change.time <= note.start:
-                            current_tempo = tempo_change.tempo
-                            current_tempo_idx += 1  # update tempo value (might not change) and index
-                        elif tempo_change.time > note.start:
+                        if tempo_change.time > note.start:
                             break  # this tempo change is beyond the current time step, we break the loop
+                        current_tempo = tempo_change.tempo
+                        current_tempo_idx += 1  # update tempo value (might not change) and index
                 event.append(self.vocab.event_to_token[f'Tempo_{current_tempo}'])
 
             # (TimeSignature)
@@ -178,16 +176,14 @@ class Octuple(MIDITokenizer):
                 if current_time_sig_idx + 1 < len(self.current_midi_metadata['time_sig_changes']):
                     # Will loop over incoming time signature changes
                     for time_sig_change in self.current_midi_metadata['time_sig_changes'][current_time_sig_idx + 1:]:
-                        # If this time signature change happened before the current moment
-                        if time_sig_change.time <= note.start:
-                            current_time_sig = self._reduce_time_signature(time_sig_change.numerator,
-                                                                           time_sig_change.denominator)
-                            current_time_sig_idx += 1  # update time signature value (might not change) and index
-                            current_time_sig_bar += (time_sig_change.time - current_time_sig_tick) // ticks_per_bar
-                            current_time_sig_tick = time_sig_change.time
-                            ticks_per_bar = time_division * current_time_sig[0]
-                        elif time_sig_change.time > note.start:
+                        if time_sig_change.time > note.start:
                             break  # this time signature change is beyond the current time step, we break the loop
+                        current_time_sig = self._reduce_time_signature(time_sig_change.numerator,
+                                                                       time_sig_change.denominator)
+                        current_time_sig_idx += 1  # update time signature value (might not change) and index
+                        current_time_sig_bar += (time_sig_change.time - current_time_sig_tick) // ticks_per_bar
+                        current_time_sig_tick = time_sig_change.time
+                        ticks_per_bar = time_division * current_time_sig[0]
                 event.append(self.vocab.event_to_token[f'TimeSig_{current_time_sig[0]}/{current_time_sig[1]}'])
 
             events.append(event)
@@ -219,7 +215,7 @@ class Octuple(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert time_division % max(self.beat_res.values()) == 0, \
-            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
+                f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_sample = time_division // max(self.beat_res.values())
 
@@ -252,7 +248,7 @@ class Octuple(MIDITokenizer):
             current_pos = int(events[4].value)
             current_bar = int(events[5].value)
             current_tick = current_time_sig_tick + (current_bar - current_time_sig_bar) * ticks_per_bar \
-                           + current_pos * ticks_per_sample
+                               + current_pos * ticks_per_sample
 
             # Append the created note
             tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))

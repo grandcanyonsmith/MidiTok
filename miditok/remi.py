@@ -44,7 +44,7 @@ class REMI(MIDITokenizer):
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
         min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
-            if self.additional_tokens['Rest'] else 0
+                if self.additional_tokens['Rest'] else 0
 
         events = []
 
@@ -59,10 +59,10 @@ class REMI(MIDITokenizer):
 
                 # (Rest)
                 if self.additional_tokens['Rest'] and note.start > previous_note_end and \
-                        note.start - previous_note_end >= min_rest:
+                            note.start - previous_note_end >= min_rest:
                     previous_tick = previous_note_end
                     rest_beat, rest_pos = divmod(note.start-previous_tick, self.current_midi_metadata['time_division'])
-                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
+                    rest_beat = min(rest_beat, max(r[0] for r in self.rests))
                     rest_pos = round(rest_pos / ticks_per_sample)
 
                     if rest_beat > 0:
@@ -71,7 +71,11 @@ class REMI(MIDITokenizer):
                         previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                     while rest_pos >= self.rests[0][1]:
-                        rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
+                        rest_pos_temp = min(
+                            (r[1] for r in self.rests),
+                            key=lambda x: abs(x - rest_pos),
+                        )
+
                         events.append(Event(type_='Rest', time=previous_note_end, value=f'0.{rest_pos_temp}',
                                             desc=f'0.{rest_pos_temp}'))
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
@@ -81,8 +85,16 @@ class REMI(MIDITokenizer):
 
                 # Bar
                 nb_new_bars = note.start // ticks_per_bar - current_bar
-                for i in range(nb_new_bars):
-                    events.append(Event(type_='Bar', time=(current_bar + i + 1) * ticks_per_bar, value=None, desc=0))
+                events.extend(
+                    Event(
+                        type_='Bar',
+                        time=(current_bar + i + 1) * ticks_per_bar,
+                        value=None,
+                        desc=0,
+                    )
+                    for i in range(nb_new_bars)
+                )
+
                 current_bar += nb_new_bars
 
                 # Position
@@ -95,19 +107,31 @@ class REMI(MIDITokenizer):
                     if current_tempo_idx + 1 < len(self.current_midi_metadata['tempo_changes']):
                         # Will loop over incoming tempo changes
                         for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
-                            # If this tempo change happened before the current moment
-                            if tempo_change.time <= note.start:
-                                current_tempo = tempo_change.tempo
-                                current_tempo_idx += 1  # update tempo value (might not change) and index
-                            else:  # <==> elif tempo_change.time > previous_tick:
+                            if tempo_change.time > note.start:
                                 break  # this tempo change is beyond the current time step, we break the loop
+                            current_tempo = tempo_change.tempo
+                            current_tempo_idx += 1  # update tempo value (might not change) and index
                     events.append(Event(type_='Tempo', time=note.start, value=current_tempo, desc=note.start))
 
                 previous_tick = note.start
 
-            # Pitch / Velocity / Duration
-            events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.pitch))
-            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
+            events.extend(
+                (
+                    Event(
+                        type_='Pitch',
+                        time=note.start,
+                        value=note.pitch,
+                        desc=note.pitch,
+                    ),
+                    Event(
+                        type_='Velocity',
+                        time=note.start,
+                        value=note.velocity,
+                        desc=f'{note.velocity}',
+                    ),
+                )
+            )
+
             duration = note.end - note.start
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
@@ -133,7 +157,7 @@ class REMI(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert time_division % max(self.beat_res.values()) == 0, \
-            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
+                f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         events = self.tokens_to_events(tokens)
 
         ticks_per_sample = time_division // max(self.beat_res.values())
@@ -235,7 +259,7 @@ class REMI(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
+        dic = {}
 
         try:
             _ = self.vocab.tokens_of_type('Program')
@@ -330,7 +354,7 @@ class REMI(MIDITokenizer):
             return 1
         elif x.type == 'Position':
             return 2
-        elif x.type == 'Chord' or x.type == 'Tempo':  # actually object_list will be before chords
+        elif x.type in ['Chord', 'Tempo']:  # actually object_list will be before chords
             return 3
         elif x.type == 'Rest':
             return 5
